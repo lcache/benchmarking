@@ -13,6 +13,7 @@ Performance and Scalability Tests
 
     export HOST=$DBIP
     export STORAGE=InsertDelete|InsertBatchDelete
+    export SPLAY=64
     php DatabaseL2.php init $STORAGE $HOST
-    seq 10 | xargs -n 1 -P 100 php DatabaseL2.php run $STORAGE $HOST
+    seq 10 | xargs -n 1 -P 100 php DatabaseL2.php run $STORAGE $SPLAY $HOST
 

@@ -158,10 +158,10 @@ class InsertBatchDelete extends InsertStorageMethod {
     }
 }
 
-function repeat_writes(StorageMethod $storage, $repetitions) {
+function repeat_writes(StorageMethod $storage, $repetitions, $splay=64) {
     $durations = [0.0, 0.0];
     for ($i = 0; $i < $repetitions; $i++) {
-        $durations[0] += $storage->write('address:' . rand(0, 64));
+        $durations[0] += $storage->write('address:' . rand(0, $splay));
     }
     $durations[1] = $storage->cleanup();
     return $durations;
@@ -169,7 +169,8 @@ function repeat_writes(StorageMethod $storage, $repetitions) {
 
 $command = $argv[1];
 $storage_class = $argv[2];
-$host = $argv[3];
+$splay = $argv[3];
+$host = $argv[4];
 $dbh = get_pdo_handle($host);
 
 //$storage = new InsertDelete($dbh);
@@ -181,7 +182,7 @@ if ($command === 'init') {
 }
 assert($command === 'run');
 
-$durations = repeat_writes($storage, 40);
+$durations = repeat_writes($storage, 40, $splay);
 echo 'Real-time: ' . $durations[0] . PHP_EOL;
 echo 'Cleanup:   ' . $durations[1] . PHP_EOL;
 
