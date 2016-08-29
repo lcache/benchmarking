@@ -59,7 +59,7 @@ class InsertDelete extends InsertStorageMethod {
         $sth = $this->dbh->prepare('INSERT INTO '. DBNAME .'.lcache_events ("pool", "address", "value", "created", "expiration") VALUES (:pool, :address, :value, :now, :expiration)');
         $sth->bindValue(':pool', POOL, PDO::PARAM_STR);
         $sth->bindValue(':address', $address, PDO::PARAM_STR);
-        $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 1024)), PDO::PARAM_LOB);
+        $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 10)), PDO::PARAM_LOB);
         $sth->bindValue(':expiration', $now + rand(0, 86400), PDO::PARAM_INT);
         $sth->bindValue(':now', $now, PDO::PARAM_INT);
         $sth->execute();
@@ -86,7 +86,7 @@ class InsertBatchDelete extends InsertStorageMethod {
         $sth = $this->dbh->prepare('INSERT INTO '. DBNAME .'.lcache_events ("pool", "address", "value", "created", "expiration") VALUES (:pool, :address, :value, :now, :expiration)');
         $sth->bindValue(':pool', POOL, PDO::PARAM_STR);
         $sth->bindValue(':address', $address, PDO::PARAM_STR);
-        $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 1024)), PDO::PARAM_LOB);
+        $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 10)), PDO::PARAM_LOB);
         $sth->bindValue(':expiration', $now + rand(0, 86400), PDO::PARAM_INT);
         $sth->bindValue(':now', $now, PDO::PARAM_INT);
         $sth->execute();
