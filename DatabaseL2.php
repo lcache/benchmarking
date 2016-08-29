@@ -17,24 +17,6 @@ function get_pdo_handle($host) {
     return $dbh;
 }
 
-function create_schema($dbh) {
-    echo 'Initializing database: ' . DBNAME . PHP_EOL;
-    $dbh->exec('DROP DATABASE IF EXISTS '. DBNAME);
-    $dbh->exec('CREATE DATABASE '. DBNAME);
-    echo 'Initializing schema.' . PHP_EOL;
-    $dbh->exec('CREATE TABLE '. DBNAME .'.lcache_events (
-                 "event_id" int(11) NOT NULL AUTO_INCREMENT,
-                 "pool" varchar(255) NOT NULL,
-                 "address" varchar(255),
-                 "value" longblob,
-                 "expiration" int(11),
-                 "created" int(11) NOT NULL,
-                 PRIMARY KEY ("event_id"),
-                 KEY "expiration" ("expiration"),
-                 KEY "lookup_miss" ("address","event_id")
-                )');
-}
-
 abstract class StorageMethod {
     protected $dbh;
 
@@ -43,13 +25,34 @@ abstract class StorageMethod {
     }
 
     abstract public function write($address);
+    abstract public function initialize();
 
     public function cleanup() {
         return 0.0;
     }
 }
 
-class InsertDelete extends StorageMethod {
+abstract class InsertStorageMethod extends StorageMethod {
+    public function initialize() {
+        echo 'Initializing database: ' . DBNAME . PHP_EOL;
+        $this->dbh->exec('DROP DATABASE IF EXISTS '. DBNAME);
+        $this->dbh->exec('CREATE DATABASE '. DBNAME);
+        echo 'Initializing schema.' . PHP_EOL;
+        $this->dbh->exec('CREATE TABLE '. DBNAME .'.lcache_events (
+                     "event_id" int(11) NOT NULL AUTO_INCREMENT,
+                     "pool" varchar(255) NOT NULL,
+                     "address" varchar(255),
+                     "value" longblob,
+                     "expiration" int(11),
+                     "created" int(11) NOT NULL,
+                     PRIMARY KEY ("event_id"),
+                     KEY "expiration" ("expiration"),
+                     KEY "lookup_miss" ("address","event_id")
+                    )');
+    }
+}
+
+class InsertDelete extends InsertStorageMethod {
     public function write($address) {
         $now = microtime(true);
 
@@ -73,10 +76,50 @@ class InsertDelete extends StorageMethod {
     }
 }
 
+class InsertBatchDelete extends InsertStorageMethod {
+    protected $deletions = [];
+    protected $event_id_low_water = 0;
+
+    public function write($address) {
+        $now = microtime(true);
+
+        $sth = $this->dbh->prepare('INSERT INTO '. DBNAME .'.lcache_events ("pool", "address", "value", "created", "expiration") VALUES (:pool, :address, :value, :now, :expiration)');
+        $sth->bindValue(':pool', POOL, PDO::PARAM_STR);
+        $sth->bindValue(':address', $address, PDO::PARAM_STR);
+        $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 1024)), PDO::PARAM_LOB);
+        $sth->bindValue(':expiration', $now + rand(0, 86400), PDO::PARAM_INT);
+        $sth->bindValue(':now', $now, PDO::PARAM_INT);
+        $sth->execute();
+
+        if ($this->event_id_low_water === 0) {
+            $this->event_id_low_water = $this->dbh->lastInsertId();
+        }
+        $this->deletions[] = $address;
+
+        $duration = microtime(true) - $now;
+        return $duration;
+    }
+
+    public function cleanup() {
+        $now = microtime(true);
+
+        $filler = implode(',', array_fill(0, count($this->deletions), '?'));
+        $sth = $this->dbh->prepare('DELETE FROM '. DBNAME .'.lcache_events WHERE "event_id" < ? AND "address" IN ('. $filler .')');
+        $sth->bindValue(1, $this->event_id_low_water, PDO::PARAM_INT);
+        foreach ($this->deletions as $i => $address) {
+            $sth->bindValue($i + 2, $address, PDO::PARAM_STR);
+        }
+        $sth->execute();
+
+        $duration = microtime(true) - $now;
+        return $duration;
+    }
+}
+
 function repeat_writes(StorageMethod $storage, $repetitions) {
     $durations = [0.0, 0.0];
     for ($i = 0; $i < $repetitions; $i++) {
-        $durations[0] += $storage->write('address:' . rand(0, 128));
+        $durations[0] += $storage->write('address:' . rand(0, 64));
     }
     $durations[1] = $storage->cleanup();
     return $durations;
@@ -85,14 +128,15 @@ function repeat_writes(StorageMethod $storage, $repetitions) {
 $command = $argv[1];
 $host = $argv[2];
 $dbh = get_pdo_handle($host);
+$storage = new InsertBatchDelete($dbh);
 
 if ($command === 'init') {
-    create_schema($dbh);
+    $storage->initialize();
     exit();
 }
 assert($command === 'run');
 
-$storage = new InsertDelete($dbh);
+//$storage = new InsertDelete($dbh);
 $durations = repeat_writes($storage, 40);
 echo 'Real-time: ' . $durations[0] . PHP_EOL;
 echo 'Cleanup:   ' . $durations[1] . PHP_EOL;
