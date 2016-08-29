@@ -103,8 +103,6 @@ class InsertBatchDelete extends InsertStorageMethod {
     public function cleanup() {
         $now = microtime(true);
 
-        print_r($this->deletions);
-
         $filler = implode(',', array_fill(0, count($this->deletions), '?'));
         $sth = $this->dbh->prepare('DELETE FROM '. DBNAME .'.lcache_events WHERE "event_id" < ? AND "address" IN ('. $filler .')');
         $sth->bindValue(1, $this->event_id_low_water, PDO::PARAM_INT);
