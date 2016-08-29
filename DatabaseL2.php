@@ -35,34 +35,51 @@ function create_schema($dbh) {
                 )');
 }
 
-function update_insert_delete($dbh, $address) {
-    $now = microtime(true);
+abstract class StorageMethod {
+    protected $dbh;
 
-    $sth = $dbh->prepare('INSERT INTO '. DBNAME .'.lcache_events ("pool", "address", "value", "created", "expiration") VALUES (:pool, :address, :value, :now, :expiration)');
-    $sth->bindValue(':pool', POOL, PDO::PARAM_STR);
-    $sth->bindValue(':address', $address, PDO::PARAM_STR);
-    $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 1024)), PDO::PARAM_LOB);
-    $sth->bindValue(':expiration', $now + rand(0, 86400), PDO::PARAM_INT);
-    $sth->bindValue(':now', $now, PDO::PARAM_INT);
-    $sth->execute();
+    public function __construct($dbh) {
+        $this->dbh = $dbh;
+    }
 
-    $event_id = $dbh->lastInsertId();
+    abstract public function write($address);
 
-    $sth = $dbh->prepare('DELETE FROM '. DBNAME .'.lcache_events WHERE "address" LIKE :address AND "event_id" < :new_event_id');
-    $sth->bindValue(':address', $address, PDO::PARAM_STR);
-    $sth->bindValue(':new_event_id', $event_id, PDO::PARAM_INT);
-    $sth->execute();
-
-    $duration = microtime(true) - $now;
-    return $duration;
+    public function cleanup() {
+        return 0.0;
+    }
 }
 
-function repeat_writes($dbh, $function, $multiple) {
-    $duration = 0.0;
-    for ($i = 0; $i < $multiple; $i++) {
-        $duration += $function($dbh, 'address:' . rand(0, 128));
+class InsertDelete extends StorageMethod {
+    public function write($address) {
+        $now = microtime(true);
+
+        $sth = $this->dbh->prepare('INSERT INTO '. DBNAME .'.lcache_events ("pool", "address", "value", "created", "expiration") VALUES (:pool, :address, :value, :now, :expiration)');
+        $sth->bindValue(':pool', POOL, PDO::PARAM_STR);
+        $sth->bindValue(':address', $address, PDO::PARAM_STR);
+        $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 1024)), PDO::PARAM_LOB);
+        $sth->bindValue(':expiration', $now + rand(0, 86400), PDO::PARAM_INT);
+        $sth->bindValue(':now', $now, PDO::PARAM_INT);
+        $sth->execute();
+
+        $event_id = $this->dbh->lastInsertId();
+
+        $sth = $this->dbh->prepare('DELETE FROM '. DBNAME .'.lcache_events WHERE "address" LIKE :address AND "event_id" < :new_event_id');
+        $sth->bindValue(':address', $address, PDO::PARAM_STR);
+        $sth->bindValue(':new_event_id', $event_id, PDO::PARAM_INT);
+        $sth->execute();
+
+        $duration = microtime(true) - $now;
+        return $duration;
     }
-    return $duration;
+}
+
+function repeat_writes(StorageMethod $storage, $repetitions) {
+    $durations = [0.0, 0.0];
+    for ($i = 0; $i < $repetitions; $i++) {
+        $durations[0] += $storage->write('address:' . rand(0, 128));
+    }
+    $durations[1] = $storage->cleanup();
+    return $durations;
 }
 
 $command = $argv[1];
@@ -75,6 +92,8 @@ if ($command === 'init') {
 }
 assert($command === 'run');
 
-$duration = repeat_writes($dbh, 'update_insert_delete', 40);
-echo 'Duration: ' . $duration . PHP_EOL;
+$storage = new InsertDelete($dbh);
+$durations = repeat_writes($storage, 40);
+echo 'Real-time: ' . $durations[0] . PHP_EOL;
+echo 'Cleanup:   ' . $durations[1] . PHP_EOL;
 
