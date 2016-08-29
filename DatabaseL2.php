@@ -128,6 +128,8 @@ function repeat_writes(StorageMethod $storage, $repetitions) {
 $command = $argv[1];
 $host = $argv[2];
 $dbh = get_pdo_handle($host);
+
+//$storage = new InsertDelete($dbh);
 $storage = new InsertBatchDelete($dbh);
 
 if ($command === 'init') {
@@ -136,7 +138,6 @@ if ($command === 'init') {
 }
 assert($command === 'run');
 
-//$storage = new InsertDelete($dbh);
 $durations = repeat_writes($storage, 40);
 echo 'Real-time: ' . $durations[0] . PHP_EOL;
 echo 'Cleanup:   ' . $durations[1] . PHP_EOL;
