@@ -32,6 +32,46 @@ abstract class StorageMethod {
     }
 }
 
+class Upsert extends StorageMethod {
+    public function initialize() {
+        echo 'Initializing database: ' . DBNAME . PHP_EOL;
+        $this->dbh->exec('DROP DATABASE IF EXISTS '. DBNAME);
+        $this->dbh->exec('CREATE DATABASE '. DBNAME);
+        echo 'Initializing schema.' . PHP_EOL;
+        // A unique key on event_id causes issues.
+        $this->dbh->exec('CREATE TABLE '. DBNAME .'.lcache_events (
+                     "event_id" int(11) NOT NULL AUTO_INCREMENT,
+                     "pool" varchar(255) NOT NULL,
+                     "address" varchar(255),
+                     "value" longblob,
+                     "expiration" int(11),
+                     "created" int(11) NOT NULL,
+                     PRIMARY KEY ("address"),
+                     KEY ("event_id"),
+                     KEY "expiration" ("expiration")
+                    )');
+    }
+
+    public function write($address) {
+        $now = microtime(true);
+
+        $sth = $this->dbh->prepare('INSERT INTO '. DBNAME .'.lcache_events ("pool", "address", "value", "created", "expiration") VALUES (:pool, :address, :value, :now, :expiration)
+                                    ON DUPLICATE KEY UPDATE "pool"=VALUES("pool"), value=VALUES("value"), "created"=VALUES("created"), "expiration"=VALUES("expiration")');
+        $sth->bindValue(':pool', POOL, PDO::PARAM_STR);
+        $sth->bindValue(':address', $address, PDO::PARAM_STR);
+        $sth->bindValue(':value', str_repeat('a', rand(1, 1024 * 10)), PDO::PARAM_LOB);
+        $sth->bindValue(':expiration', $now + rand(0, 86400), PDO::PARAM_INT);
+        $sth->bindValue(':now', $now, PDO::PARAM_INT);
+        $sth->execute();
+
+        $event_id = $this->dbh->lastInsertId();
+
+        $duration = microtime(true) - $now;
+        return $duration;
+    }
+}
+
+
 abstract class InsertStorageMethod extends StorageMethod {
     public function initialize() {
         echo 'Initializing database: ' . DBNAME . PHP_EOL;
