@@ -3,7 +3,7 @@ Performance and Scalability Tests
 
 ## Setup
 
-    sudo dnf install -y parallel
+    sudo dnf install -y php-cli php-mysqlnd
 
 ## Usage
 
@@ -11,6 +11,7 @@ Performance and Scalability Tests
 
 2. Run the tests:
 
+    export HOST=$DBIP
     php DatabaseL2.php init $HOST
-    seq 10 | parallel -n0 php DatabaseL2.php run $HOST
+    seq 10 | xargs -n 1 -P 100 php DatabaseL2.php run $HOST
 
