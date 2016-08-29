@@ -22,7 +22,7 @@ function create_schema($dbh) {
     $dbh->exec('DROP DATABASE IF EXISTS '. DBNAME);
     $dbh->exec('CREATE DATABASE '. DBNAME);
     echo 'Initializing schema.' . PHP_EOL;
-    $dbh->exec('CREATE TABLE "lcache_events" (
+    $dbh->exec('CREATE TABLE '. DBNAME .'.lcache_events (
                  "event_id" int(11) NOT NULL AUTO_INCREMENT,
                  "pool" varchar(255) NOT NULL,
                  "address" varchar(255),
@@ -60,7 +60,7 @@ function update_insert_delete($dbh, $address) {
 function repeat_writes($dbh, $function, $multiple) {
     $duration = 0.0;
     for ($i = 0; $i < $multiple; $i++) {
-        $duration += $function($dbh, 'address:' . rand(0, 1024));
+        $duration += $function($dbh, 'address:' . rand(0, 128));
     }
     return $duration;
 }
