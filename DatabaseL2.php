@@ -169,8 +169,7 @@ function repeat_writes(StorageMethod $storage, $repetitions, $splay=64) {
 
 $command = $argv[1];
 $storage_class = $argv[2];
-$splay = $argv[3];
-$host = $argv[4];
+$host = $argv[3];
 $dbh = get_pdo_handle($host);
 
 //$storage = new InsertDelete($dbh);
@@ -181,6 +180,8 @@ if ($command === 'init') {
     exit();
 }
 assert($command === 'run');
+
+$splay = $argv[4];
 
 $durations = repeat_writes($storage, 40, $splay);
 echo 'Real-time: ' . $durations[0] . PHP_EOL;
